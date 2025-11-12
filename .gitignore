@@ -207,5 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 # Ignore test scripts
+/tests
 interactive_bot.py
 test_bot.py
