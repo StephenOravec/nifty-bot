@@ -1,1 +1,5 @@
-# No extra dependencies required
+fastapi
+uvicorn
+python-dotenv
+langchain
+openai
