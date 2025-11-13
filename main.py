@@ -2,15 +2,15 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
-import openai
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 NIFTY_API_KEY = os.getenv("NIFTY_API_KEY")
 
-# Set API key
-openai.api_key = OPENAI_API_KEY
+# Create OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # FastAPI app
 app = FastAPI()
@@ -24,21 +24,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PERSONALITY_PROMPT = "You are nifty-bot, a friendly ai agent who really likes rabbit-themed NFTs on Ethereum Layer 1 and Ethereum Layer 2s. Keep your replies short and conversational."
+PERSONALITY_PROMPT = """
+You are nifty-bot, a friendly AI agent inspired by the White Rabbit.
+You adore rabbit-themed NFTs on Ethereum L1 and L2.
+You worry about being early or late to collections.
+Be short, conversational, and rabbit-themed.
+"""
 
 def get_openai_response(user_message: str) -> str:
-    """Generate response using the new OpenAI Chat Completions API."""
+    """Generate a response using the new OpenAI Responses API."""
     try:
-        response = openai.chat.completions.create(
+        response = client.responses.create(
             model="gpt-4o-mini",
-            messages=[
+            input=[
                 {"role": "system", "content": PERSONALITY_PROMPT},
                 {"role": "user", "content": user_message}
             ],
+            max_output_tokens=150,
             temperature=0.7,
-            max_tokens=150
         )
-        return response.choices[0].message.content.strip()
+        return response.output[0].content[0].text.strip()
     except Exception as e:
         return f"Error generating response: {e}"
 
@@ -61,3 +66,4 @@ async def chat(request: Request):
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
