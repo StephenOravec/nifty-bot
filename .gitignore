@@ -210,6 +210,7 @@ __marimo__/
 /tests
 interactive_bot.py
 test_bot.py
+nifty_test.py
 
 # Ignore original bot code
 /og
