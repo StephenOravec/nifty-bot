@@ -3,22 +3,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 from openai import OpenAI
+from google.cloud import firestore
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-NIFTY_API_KEY = os.getenv("NIFTY_API_KEY")
 
-# Create OpenAI client
+# OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Initialize Firestore client
+db = firestore.Client()
 
 # FastAPI app
 app = FastAPI()
 
-# CORS setup
+# CORS for production front-end domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://oravec.io"],
+    allow_origins=["https://oravec.io"],  # production front-end
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,39 +34,73 @@ You worry about being early or late to collections.
 Be short, conversational, and rabbit-themed.
 """
 
-def get_openai_response(user_message: str) -> str:
-    """Generate a response using the new OpenAI Responses API."""
+# ----------------------
+# Helper Functions
+# ----------------------
+
+def get_openai_response(user_message: str, memory_messages: list) -> str:
+    """Call OpenAI with memory context."""
     try:
+        # Include short-term memory in messages
+        messages = [{"role": "system", "content": PERSONALITY_PROMPT}]
+        messages.extend(memory_messages)
+        messages.append({"role": "user", "content": user_message})
+
         response = client.responses.create(
             model="gpt-4o-mini",
-            input=[
-                {"role": "system", "content": PERSONALITY_PROMPT},
-                {"role": "user", "content": user_message}
-            ],
+            input=messages,
             max_output_tokens=150,
-            temperature=0.7,
         )
         return response.output[0].content[0].text.strip()
     except Exception as e:
         return f"Error generating response: {e}"
 
-# Chat endpoint
+def get_memory(user_id: str, limit: int = 20):
+    """Retrieve last `limit` messages from Firestore for this user."""
+    doc_ref = db.collection("sessions").document(user_id)
+    doc = doc_ref.get()
+    if doc.exists:
+        messages = doc.to_dict().get("messages", [])
+        return messages[-limit:]  # last N messages
+    return []
+
+def save_message(user_id: str, role: str, text: str):
+    """Append message to Firestore memory."""
+    doc_ref = db.collection("sessions").document(user_id)
+    doc_ref.set(
+        {
+            "messages": firestore.ArrayUnion([{"role": role, "text": text}])
+        },
+        merge=True
+    )
+
+# ----------------------
+# Endpoints
+# ----------------------
+
 @app.post("/chat")
 async def chat(request: Request):
-    key = request.headers.get("x-api-key")
-    if key != NIFTY_API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     data = await request.json()
-    text = data.get("message", "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Message is required")
+    user_id = data.get("user_id")
+    message = data.get("message", "").strip()
 
-    reply = get_openai_response(text)
+    if not user_id or not message:
+        raise HTTPException(status_code=400, detail="user_id and message required")
+
+    # Retrieve last 20 messages for context
+    memory = get_memory(user_id)
+
+    # Generate response
+    reply = get_openai_response(message, memory)
+
+    # Save user and bot messages
+    save_message(user_id, "user", message)
+    save_message(user_id, "bot", reply)
+
     return {"response": reply}
 
-# Health check
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
 
