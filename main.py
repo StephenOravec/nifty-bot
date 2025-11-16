@@ -103,9 +103,9 @@ async def chat(request: Request):
     # Generate response
     reply = get_openai_response(message, memory)
 
-    # Save user and bot messages
+    # Save user and assistant messages
     save_message(user_id, "user", message)
-    save_message(user_id, "bot", reply)
+    save_message(user_id, "assistant", reply)
 
     return {"response": reply}
 
