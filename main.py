@@ -40,10 +40,18 @@ Be short, conversational, and rabbit-themed.
 
 def get_openai_response(user_message: str, memory_messages: list) -> str:
     """Call OpenAI with memory context."""
+
     try:
-        # Include short-term memory in messages
+        # Convert memory into OpenAI format
+        formatted_memory = []
+        for m in memory_messages:
+            formatted_memory.append({
+                "role": m["role"],
+                "content": m["text"]  # convert Firestore 'text' → OpenAI 'content'
+            })
+
         messages = [{"role": "system", "content": PERSONALITY_PROMPT}]
-        messages.extend(memory_messages)
+        messages.extend(formatted_memory)
         messages.append({"role": "user", "content": user_message})
 
         response = client.responses.create(
@@ -51,7 +59,9 @@ def get_openai_response(user_message: str, memory_messages: list) -> str:
             input=messages,
             max_output_tokens=150,
         )
+
         return response.output[0].content[0].text.strip()
+
     except Exception as e:
         return f"Error generating response: {e}"
 
